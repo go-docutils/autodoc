@@ -52,10 +52,20 @@ rendered properly via `go/doc/comment`, not flattened to plain prose. A
 `[Symbol]` doc link renders as inline code rather than a cross-reference:
 there is nowhere for it to point without a real multi-file site (v1 has
 none), so it stays visually distinct from ordinary prose instead of either
-resolving to nothing or vanishing into it.
+resolving to nothing or vanishing into it. An Example function
+(`ExampleFoo`, `ExampleFoo_Bar` for a method, `ExampleFoo_suffix` for a
+second one — found in a `_test.go` file the same way `go doc`/godoc
+itself locates them) renders as its own nested section, code and expected
+output included, one level deeper than the symbol it exemplifies. That
+depth matters for correctness, not just looks: docutils/rst tracks
+section nesting by first-seen order of the underline CHARACTER, not a
+depth number, so a method's own Example reusing its method's underline
+character would parse as the method's SIBLING instead of its child — this
+package's heading table has four distinct levels precisely so a
+method-level Example (as deep as this package's output ever nests) never
+collides with the level above it.
 
-**Not implemented**: cross-symbol navigation (see above), Examples
-(`go/doc`'s own field, extracted from `_test.go` files), and per-field
+**Not implemented**: cross-symbol navigation (see above), and per-field
 struct documentation (a type's declaration is shown verbatim instead,
 which already carries field doc comments as ordinary Go comments —
 readable, just not individually reST-structured). A large undocumented

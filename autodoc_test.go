@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/go-docutils/autodoc"
+	"github.com/go-docutils/docutils/doctree"
 	"github.com/go-docutils/docutils/rst"
 )
 
@@ -42,11 +43,49 @@ func TestGenerateContains(t *testing.T) {
 		"Hello\n~~~~~", // a method nests one level deeper than its type
 		"func (g *Greeter) Hello() string",
 		"Casual, Formal\n--------------",
+		"fmt.Println(example.Greet(\"World\"))",
+		"Output:\n\n::\n\n    Hello, World",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("Generate output missing %q:\n%s", want, src)
 		}
 	}
+}
+
+// TestMethodExampleNestsUnderItsMethod guards a real structural bug: with
+// only 3 heading-depth characters, a method's own Example (package(0) ->
+// type(1) -> method(2) -> example(3), clamped) reused the SAME underline
+// character as the method itself — two sections sharing one underline
+// character parse as SIBLINGS in reST (docutils/rst tracks nesting by
+// first-seen order of the character, not by any notion of "depth"), so
+// the example silently came out as the method's sibling instead of its
+// child. headingChars grew a 4th level to fix it; this asserts the fixed
+// shape by walking the actual parsed tree, not just checking the raw
+// underline characters differ (which wouldn't prove nesting on its own).
+func TestMethodExampleNestsUnderItsMethod(t *testing.T) {
+	src := generate(t)
+	tree := rst.Parse(src)
+	pkg := findSection(t, tree, "example.test/examplemod")
+	greeter := findSection(t, pkg, "Greeter")
+	hello := findSection(t, greeter, "Hello")
+	findSection(t, hello, "Example") // fails the test via t.Fatal if not found nested here
+}
+
+func findSection(t *testing.T, parent *doctree.Element, title string) *doctree.Element {
+	t.Helper()
+	for _, c := range parent.Children {
+		el, ok := c.(*doctree.Element)
+		if !ok || el.Tag != doctree.TagSection {
+			continue
+		}
+		for _, cc := range el.Children {
+			if te, ok := cc.(*doctree.Element); ok && te.Tag == doctree.TagTitle && doctree.AsText(te) == title {
+				return el
+			}
+		}
+	}
+	t.Fatalf("no %q section found nested under this parent", title)
+	return nil
 }
 
 // TestGenerateOutputParses is this package's own correctness proof, the

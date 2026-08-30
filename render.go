@@ -16,11 +16,19 @@ import (
 )
 
 // Section-underline characters, one per nesting depth: package, then
-// func/type/const-or-var group, then a type's own methods — three levels
-// deep is as far as this package's own output ever nests, so unlike
-// docutils/rst's own first-seen-order tracking (arbitrary depth), a fixed
-// table is enough here.
-var headingChars = []byte{'=', '-', '~'}
+// func/type/const-or-var group, then a type's own methods (or a
+// package/func/type's own Example), then a method's own Example — four
+// levels deep is as far as this package's own output ever nests, so
+// unlike docutils/rst's own first-seen-order tracking (arbitrary depth), a
+// fixed table is enough here. Matters for correctness, not just looks: two
+// sections at the SAME depth sharing one underline character parse as
+// SIBLINGS in reST (docutils/rst tracks nesting by first-seen order of the
+// underline character itself, not by any notion of "depth"), so reusing a
+// shallower level's character for a deeper one would misnest a method's
+// own Example as the method's sibling instead of its child — this table
+// exists specifically so that never happens. The characters themselves
+// follow real docutils' own conventional depth sequence.
+var headingChars = []byte{'=', '-', '~', '^'}
 
 func renderPackage(fset *token.FileSet, pkg *doc.Package) string {
 	var b strings.Builder
@@ -28,6 +36,7 @@ func renderPackage(fset *token.FileSet, pkg *doc.Package) string {
 	if pkg.Doc != "" {
 		b.WriteString(renderCommentDoc(pkg.Doc))
 	}
+	renderExamples(&b, fset, pkg.Examples, 1)
 	for _, fn := range pkg.Funcs {
 		renderFunc(&b, fset, fn, 1)
 	}
@@ -49,6 +58,7 @@ func renderFunc(b *strings.Builder, fset *token.FileSet, fn *doc.Func, depth int
 	if fn.Doc != "" {
 		b.WriteString(renderCommentDoc(fn.Doc))
 	}
+	renderExamples(b, fset, fn.Examples, depth+1)
 }
 
 func renderType(b *strings.Builder, fset *token.FileSet, t *doc.Type) {
@@ -57,11 +67,39 @@ func renderType(b *strings.Builder, fset *token.FileSet, t *doc.Type) {
 	if t.Doc != "" {
 		b.WriteString(renderCommentDoc(t.Doc))
 	}
+	renderExamples(b, fset, t.Examples, 2)
 	for _, fn := range t.Funcs {
 		renderFunc(b, fset, fn, 2)
 	}
 	for _, m := range t.Methods {
 		renderFunc(b, fset, m, 2)
+	}
+}
+
+// renderExamples renders each Example function go/doc already associated
+// with a package, function, type, or method by name — "ExampleFoo" (or,
+// suffixed, "ExampleFoo_bar") in any _test.go file this package's own
+// parseExampleFiles included. depth is one level deeper than the symbol
+// the examples belong to; writeHeading clamps it, so an example nested
+// under a method (depth 3, past this package's own 3-level heading table)
+// still renders instead of panicking on an out-of-range index — the bug
+// this exact case caught during development, before Examples existed to
+// need the depth at all.
+func renderExamples(b *strings.Builder, fset *token.FileSet, examples []*doc.Example, depth int) {
+	for _, ex := range examples {
+		title := "Example"
+		if ex.Suffix != "" {
+			title += " (" + ex.Suffix + ")"
+		}
+		writeHeading(b, title, depth)
+		writeCodeBlock(b, declText(fset, ex.Code))
+		if ex.Doc != "" {
+			b.WriteString(renderCommentDoc(ex.Doc))
+		}
+		if ex.Output != "" || ex.EmptyOutput {
+			b.WriteString("Output:\n\n")
+			writeCodeBlock(b, ex.Output)
+		}
 	}
 }
 
@@ -99,10 +137,10 @@ func declText(fset *token.FileSet, node ast.Node) string {
 }
 
 func writeHeading(b *strings.Builder, title string, depth int) {
-	ch := headingChars[depth]
 	if depth >= len(headingChars) {
-		ch = headingChars[len(headingChars)-1]
+		depth = len(headingChars) - 1
 	}
+	ch := headingChars[depth]
 	b.WriteString(title + "\n")
 	b.WriteString(strings.Repeat(string(ch), utf8.RuneCountInString(title)) + "\n\n")
 }

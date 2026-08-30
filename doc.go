@@ -25,13 +25,15 @@
 // how [github.com/go-richdoc/rst/pdf] already proves a document all the
 // way to a real PDF). A doc comment's structure (headings, lists,
 // preformatted code, links) is rendered properly via go/doc/comment, not
-// flattened to plain prose. NOT implemented: cross-symbol navigation (a
-// [T] doc link renders as inline code, not a cross-reference — there is
-// nowhere for it to point without a real multi-file site), examples
-// (go/doc's own Examples field, extracted from _test.go files), and
-// interface/struct field-level documentation (a type's declaration is
-// shown verbatim instead, which already carries field doc comments as
-// ordinary Go comments — readable, just not individually reST-structured).
+// flattened to plain prose. An Example function ("ExampleFoo", found in a
+// _test.go file the same way `go doc`/godoc itself locates them) renders
+// as its own nested section, code and expected output included. NOT
+// implemented: cross-symbol navigation (a [T] doc link renders as inline
+// code, not a cross-reference — there is nowhere for it to point without a
+// real multi-file site), and interface/struct field-level documentation
+// (a type's declaration is shown verbatim instead, which already carries
+// field doc comments as ordinary Go comments — readable, just not
+// individually reST-structured).
 package autodoc
 
 import (
@@ -157,9 +159,42 @@ func renderPackageDir(dir, importPath string) (string, error) {
 	if len(files) == 0 || pkgName == "main" {
 		return "", nil
 	}
+	testFiles, err := parseExampleFiles(fset, dir, entries, pkgName)
+	if err != nil {
+		return "", err
+	}
+	files = append(files, testFiles...)
 	pkg, err := doc.NewFromFiles(fset, files, importPath)
 	if err != nil {
 		return "", fmt.Errorf("building doc: %w", err)
 	}
 	return renderPackage(fset, pkg), nil
+}
+
+// parseExampleFiles parses this directory's _test.go files (both the
+// package's own internal tests and its "_test"-suffixed external test
+// package — an Example function commonly lives in the latter) so
+// doc.NewFromFiles below can extract and associate Examples with the
+// function/type/package they exemplify by name, exactly as `go doc`
+// itself does. Only Example functions actually make it into the
+// rendered output (see renderFunc/renderType/renderPackage) — the rest
+// of a _test.go file's declarations are parsed and then simply never
+// visited, doc.NewFromFiles's own concern, not this package's.
+func parseExampleFiles(fset *token.FileSet, dir string, entries []os.DirEntry, pkgName string) ([]*ast.File, error) {
+	var files []*ast.File
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.ParseComments)
+		if err != nil {
+			return nil, fmt.Errorf("parsing %s: %w", name, err)
+		}
+		if f.Name.Name != pkgName && f.Name.Name != pkgName+"_test" {
+			continue
+		}
+		files = append(files, f)
+	}
+	return files, nil
 }
