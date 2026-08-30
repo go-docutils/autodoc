@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  GOWORK: "off"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    # The race detector needs cgo at test time; the library itself stays
+    # CGO-free, which the cross-build job proves with CGO_ENABLED=0.
+    env:
+      CGO_ENABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+      - name: Gofmt
+        # testdata/brokenmod holds one deliberately syntactically invalid
+        # .go fixture (see autodoc_test.go's TestSyntaxErrorIsAnError) —
+        # go build/vet already skip any "testdata" directory by
+        # convention, but gofmt itself does not, so it's excluded by hand
+        # here.
+        run: |
+          out=$(gofmt -l $(find . -name '*.go' -not -path './testdata/*'))
+          if [ -n "$out" ]; then
+            echo "gofmt needs to be run on:"
+            echo "$out"
+            exit 1
+          fi
+      - name: Vet
+        run: CGO_ENABLED=0 go vet ./...
+      - name: Test with coverage (race)
+        run: go test -race -covermode=atomic -coverprofile=cover.out ./...
+      - name: Enforce coverage floor (85%)
+        # Not 100%: several branches are genuinely defensive rather than
+        # reachable through this package's own logic — go/printer failing
+        # on a well-formed *ast.FuncDecl/*ast.GenDecl, or a heading depth
+        # past the 3 levels this package's own output ever nests to. See
+        # the README for what the test suite does cover: every construct
+        # in testdata/examplemod, plus the real correctness proof
+        # (TestGenerateOutputParses feeds output back through
+        # docutils/rst.Parse itself).
+        run: |
+          go tool cover -func=cover.out
+          pct=$(go tool cover -func=cover.out | awk '/^total:/{print $3}' | tr -d '%')
+          awk -v p="$pct" 'BEGIN{exit (p+0<85.0)?1:0}'
+
+  cross-build:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: "0"
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - linux/amd64
+          - linux/arm64
+          - linux/riscv64
+          - linux/ppc64le
+          - linux/s390x
+          - linux/loong64
+          - darwin/amd64
+          - darwin/arm64
+          - windows/amd64
+          - js/wasm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+      - name: Build ${{ matrix.target }}
+        run: |
+          export GOOS=$(echo "${{ matrix.target }}" | cut -d/ -f1)
+          export GOARCH=$(echo "${{ matrix.target }}" | cut -d/ -f2)
+          go build ./...
