@@ -27,13 +27,14 @@
 // preformatted code, links) is rendered properly via go/doc/comment, not
 // flattened to plain prose. An Example function ("ExampleFoo", found in a
 // _test.go file the same way `go doc`/godoc itself locates them) renders
-// as its own nested section, code and expected output included. NOT
-// implemented: cross-symbol navigation (a [T] doc link renders as inline
-// code, not a cross-reference — there is nowhere for it to point without a
-// real multi-file site), and interface/struct field-level documentation
-// (a type's declaration is shown verbatim instead, which already carries
-// field doc comments as ordinary Go comments — readable, just not
-// individually reST-structured).
+// as its own nested section, code and expected output included. A struct's
+// exported, documented fields are additionally listed as a reST definition
+// list — the declaration code block already shows them verbatim with their
+// Go comments, but a field's doc comment gets the same structured
+// treatment (headings/lists/links) any other doc comment does, not just
+// readable-as-Go-source. NOT implemented: cross-symbol navigation (a [T]
+// doc link renders as inline code, not a cross-reference — there is
+// nowhere for it to point without a real multi-file site).
 package autodoc
 
 import (

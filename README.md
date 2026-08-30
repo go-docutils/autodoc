@@ -65,10 +65,13 @@ package's heading table has four distinct levels precisely so a
 method-level Example (as deep as this package's output ever nests) never
 collides with the level above it.
 
-**Not implemented**: cross-symbol navigation (see above), and per-field
-struct documentation (a type's declaration is shown verbatim instead,
-which already carries field doc comments as ordinary Go comments —
-readable, just not individually reST-structured). A large undocumented
+A struct's exported, documented fields are additionally listed as a reST
+definition list right after the type's own doc — the declaration code
+block already shows every field verbatim with its Go comments, but a
+field's own doc comment gets the same `go/doc/comment`-structured
+treatment any other doc comment does.
+
+**Not implemented**: cross-symbol navigation (see above). A large undocumented
 const/var group (more than four names sharing one block, `doctree`'s own
 `Tag*` constants being exactly this shape) gets a bounded heading — the
 first three names and a count — rather than every name joined into one

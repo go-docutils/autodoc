@@ -40,6 +40,7 @@ func TestGenerateContains(t *testing.T) {
 		"1. the formality level\n2. the name itself",
 		"- says goodbye\n- moves on",
 		"Greeter\n-------\n\n::\n\n    type Greeter struct {",
+		"``Name`` (string)\n    Name is who to greet.",
 		"Hello\n~~~~~", // a method nests one level deeper than its type
 		"func (g *Greeter) Hello() string",
 		"Casual, Formal\n--------------",
@@ -69,6 +70,32 @@ func TestMethodExampleNestsUnderItsMethod(t *testing.T) {
 	greeter := findSection(t, pkg, "Greeter")
 	hello := findSection(t, greeter, "Hello")
 	findSection(t, hello, "Example") // fails the test via t.Fatal if not found nested here
+}
+
+// TestStructFieldBecomesDefinitionListItem checks the field documentation
+// actually parses as a real reST definition list (a <term>/<definition>
+// pair), not just that the raw text happens to contain the right
+// substrings — the same "walk the parsed tree" rigor as the nesting test
+// above, since term/body indentation is exactly the kind of thing that
+// looks right in a string comparison while being subtly malformed reST.
+func TestStructFieldBecomesDefinitionListItem(t *testing.T) {
+	src := generate(t)
+	tree := rst.Parse(src)
+	pkg := findSection(t, tree, "example.test/examplemod")
+	greeter := findSection(t, pkg, "Greeter")
+	var dl *doctree.Element
+	for _, c := range greeter.Children {
+		if el, ok := c.(*doctree.Element); ok && el.Tag == doctree.TagDefinitionList {
+			dl = el
+		}
+	}
+	if dl == nil {
+		t.Fatalf("no definition_list found under Greeter's own section")
+	}
+	item, ok := dl.Children[0].(*doctree.Element)
+	if !ok || item.Tag != doctree.TagDefinitionListItem {
+		t.Fatalf("definition_list's first child is not a definition_list_item: %#v", dl.Children[0])
+	}
 }
 
 func findSection(t *testing.T, parent *doctree.Element, title string) *doctree.Element {

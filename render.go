@@ -67,6 +67,7 @@ func renderType(b *strings.Builder, fset *token.FileSet, t *doc.Type) {
 	if t.Doc != "" {
 		b.WriteString(renderCommentDoc(t.Doc))
 	}
+	renderStructFields(b, fset, t)
 	renderExamples(b, fset, t.Examples, 2)
 	for _, fn := range t.Funcs {
 		renderFunc(b, fset, fn, 2)
@@ -74,6 +75,63 @@ func renderType(b *strings.Builder, fset *token.FileSet, t *doc.Type) {
 	for _, m := range t.Methods {
 		renderFunc(b, fset, m, 2)
 	}
+}
+
+// renderStructFields documents a struct type's exported fields as a reST
+// definition list, term "“Name“ (Type)" and body the field's own doc
+// comment rendered with the same structure (headings/lists/links) any
+// other doc comment gets — the declaration code block above already shows
+// every field with its Go comments verbatim, readable, but not
+// individually reST-structured the way a symbol's own doc comment is.
+// An undocumented or unexported field, or an embedded one (Field.Names is
+// nil for those — go/ast's own documented convention is that the type
+// name doubles as the field name, which isn't a real exported identifier
+// of its own to list here), is skipped.
+func renderStructFields(b *strings.Builder, fset *token.FileSet, t *doc.Type) {
+	spec, ok := t.Decl.Specs[0].(*ast.TypeSpec)
+	for _, s := range t.Decl.Specs {
+		if ts, ok2 := s.(*ast.TypeSpec); ok2 && ts.Name.Name == t.Name {
+			spec, ok = ts, true
+			break
+		}
+	}
+	if !ok {
+		return
+	}
+	st, ok := spec.Type.(*ast.StructType)
+	if !ok {
+		return
+	}
+	for _, f := range st.Fields.List {
+		if len(f.Names) == 0 || f.Doc == nil {
+			continue
+		}
+		var names []string
+		for _, n := range f.Names {
+			if ast.IsExported(n.Name) {
+				names = append(names, n.Name)
+			}
+		}
+		if len(names) == 0 {
+			continue
+		}
+		b.WriteString("``" + strings.Join(names, ", ") + "`` (" + declText(fset, f.Type) + ")\n")
+		b.WriteString(indentLines(renderCommentDoc(f.Doc.Text())))
+	}
+}
+
+// indentLines prefixes every non-blank line of s with 4 spaces, reST's
+// definition-list body convention — the term goes on its own unindented
+// line, everything under it must be indented to stay part of the same
+// item.
+func indentLines(s string) string {
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	for i, l := range lines {
+		if l != "" {
+			lines[i] = "    " + l
+		}
+	}
+	return strings.Join(lines, "\n") + "\n\n"
 }
 
 // renderExamples renders each Example function go/doc already associated
