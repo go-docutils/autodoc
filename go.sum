@@ -2,3 +2,5 @@ github.com/go-docutils/docutils v0.12.0 h1:oNryaNH2lPEdVVTzQX6fnPGqUii7BLS5GLZkP
 github.com/go-docutils/docutils v0.12.0/go.mod h1:HuaoJ4l8061JVxj8IxKWAooCTUEa7agwK+0epTlzApw=
 github.com/go-docutils/docutils v0.25.0 h1:oVCfFvVkziZ7wJhGEbnt6df/qPzLEY/3LhTk+EzILrQ=
 github.com/go-docutils/docutils v0.25.0/go.mod h1:HuaoJ4l8061JVxj8IxKWAooCTUEa7agwK+0epTlzApw=
+github.com/go-docutils/docutils v0.30.0 h1:tgNlzp+C5uGiIP4vVHPzPtr4x7CRrIGxDcQoA+1kF38=
+github.com/go-docutils/docutils v0.30.0/go.mod h1:HuaoJ4l8061JVxj8IxKWAooCTUEa7agwK+0epTlzApw=
