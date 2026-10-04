@@ -89,6 +89,13 @@ pattern `go-richdoc/rst`'s `Write` uses for itself. `go vet ./...` and
 `gofmt -l .` (excluding `testdata`, which intentionally holds one
 syntactically invalid fixture) are clean.
 
+Requires **Go 1.27.1**, the version the CI workflow pins — both were on 1.26.4
+until now, so unlike its sibling they were at least in step. Coverage is 88.5%
+against an 85% floor, and that figure is the same under 1.26.4 and 1.27.1: 1.27
+counts statements more finely and usually moves the ratio (`docutils` reads 93.2%
+under 1.26.4 and 93.7% under 1.27.1), so a figure is quoted with the toolchain
+that produced it. Here it happens not to move.
+
 ## License
 
 BSD-3-Clause. See [LICENSE](LICENSE).
